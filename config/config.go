@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 )
 
@@ -21,19 +20,21 @@ var App Application
 const configDir = "config"
 
 func Initialize(profile string) error {
-	filename := checkProfileAndGetFilePath(profile)
+	filename, err := checkProfileAndGetFilePath(profile)
+	if err != nil {
+		return fmt.Errorf("errore checking profile: %v", err)
+	}
 	content, err := os.ReadFile(filename)
 	if err != nil {
 		return fmt.Errorf("error reading file: %v", err)
 	}
-
 	if err = json.Unmarshal(content, &App); err != nil {
 		return fmt.Errorf("error unmarshaling JSON: %v", err)
 	}
 	return nil
 }
 
-func checkProfileAndGetFilePath(profile string) string {
+func checkProfileAndGetFilePath(profile string) (string, error) {
 	var filename string
 	switch {
 	case profile == "dev":
@@ -43,7 +44,7 @@ func checkProfileAndGetFilePath(profile string) string {
 	case profile == "prod":
 		filename = fmt.Sprintf("%s/application.json", configDir)
 	default:
-		log.Fatalf("Profile %s is not valid value", profile)
+		return "", fmt.Errorf("profile %s is not valid value", profile)
 	}
-	return filename
+	return filename, nil
 }

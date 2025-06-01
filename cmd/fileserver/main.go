@@ -22,14 +22,14 @@ func main() {
 		log.Fatalf("Error to read %s configuration: %v\n", profile, err)
 	}
 	log.Printf("Application starting with profile: %s", profile)
-	server := config.App.Server
-	mux := http.NewServeMux()
 	// Register all routes in the new ServeMux
+	mux := http.NewServeMux()
 	log.Printf("Register all routes\n")
 	for url, handler := range api.Routes {
 		log.Printf("Register route %s for %v", url, getFunctionName(handler))
 		mux.HandleFunc(url, handler)
 	}
+	server := config.App.Server
 	url := fmt.Sprintf("%s:%d", server.Host, server.Port)
 	log.Printf("Start server on %s\n", url)
 	if err := http.ListenAndServe(url, mux); err != nil {

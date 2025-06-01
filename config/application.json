@@ -1,6 +1,6 @@
 {
   "server": {
     "host": "localhost",
-    "port": 8089
+    "port": 8080
   }
 }
