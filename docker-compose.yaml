@@ -1,0 +1,50 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: pgfileserver
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fileserver
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - backend_net
+
+  minio:
+    image: minio/minio:latest
+    container_name: miniofs
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    volumes:
+      - minio_data:/data
+    networks:
+      - backend_net
+
+  fileserver:
+    image: fileserver:latest
+    container_name: fileserver
+    restart: always
+    ports:
+      - "8080:8081"
+    networks:
+      - backend_net
+
+volumes:
+  pg_data:
+  minio_data:
+
+networks:
+  backend_net:
+    driver: bridge

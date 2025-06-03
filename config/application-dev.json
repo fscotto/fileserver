@@ -2,5 +2,18 @@
   "server": {
     "host": "localhost",
     "port": 8081
+  },
+  "database": {
+    "driver": "postgres",
+    "host": "localhost",
+    "port": 5432,
+    "name": "fileserver",
+    "username": "postgres",
+    "password": "postgres"
+  },
+  "minio": {
+    "url": "localhost:9000",
+    "username": "minioadmin",
+    "password": "minioadmin"
   }
 }
