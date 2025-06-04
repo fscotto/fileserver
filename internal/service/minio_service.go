@@ -9,6 +9,15 @@ import (
 )
 
 // GetFileFromMinIO retrieves a file from the specified MinIO bucket.
+// It returns the file object if found, or an error if there is an issue with fetching the file.
+//
+// Parameters:
+// - bucketName (string): The name of the MinIO bucket to fetch the file from.
+// - objectName (string): The name of the object (file) to retrieve from the bucket.
+//
+// Returns:
+// - *minio.Object: The file object retrieved from MinIO.
+// - error: An error is returned if there is an issue fetching the object from MinIO.
 func GetFileFromMinIO(bucketName, objectName string) (*minio.Object, error) {
 	// Fetch the object from MinIO using the provided bucket name and object name
 	object, err := config.MinIO.GetObject(context.Background(), bucketName, objectName, minio.GetObjectOptions{})
@@ -21,6 +30,16 @@ func GetFileFromMinIO(bucketName, objectName string) (*minio.Object, error) {
 }
 
 // UploadFileToMinIO uploads a file to MinIO under the specified bucket and object name.
+// If the bucket does not exist, it is created first.
+//
+// Parameters:
+// - ctx (context.Context): The context for the operation (to control request lifetime).
+// - bucketName (string): The name of the MinIO bucket to upload the file to.
+// - objectName (string): The name of the object (file) in MinIO.
+// - filePath (string): The local file path of the file to upload.
+//
+// Returns:
+// - error: An error is returned if there is any issue during file upload.
 func UploadFileToMinIO(ctx context.Context, bucketName, objectName, filePath string) error {
 	// Open the file from the given file path
 	file, err := os.Open(filePath)
@@ -47,6 +66,14 @@ func UploadFileToMinIO(ctx context.Context, bucketName, objectName, filePath str
 }
 
 // createBucketIfNotExists checks if the specified bucket exists and creates it if it doesn't.
+// It is called by `UploadFileToMinIO` to ensure the bucket is available before uploading.
+//
+// Parameters:
+// - ctx (context.Context): The context for the operation (to control request lifetime).
+// - bucketName (string): The name of the bucket to check/create.
+//
+// Returns:
+// - error: An error is returned if the bucket checking or creation process fails.
 func createBucketIfNotExists(ctx context.Context, bucketName string) error {
 	// Check if the bucket already exists
 	exists, err := config.MinIO.BucketExists(ctx, bucketName)
@@ -71,6 +98,14 @@ func createBucketIfNotExists(ctx context.Context, bucketName string) error {
 }
 
 // DeleteFileFromMinIO removes a file from the specified MinIO bucket.
+//
+// Parameters:
+// - ctx (context.Context): The context for the operation (to control request lifetime).
+// - bucketName (string): The name of the MinIO bucket where the file is stored.
+// - objectName (string): The name of the object (file) to delete.
+//
+// Returns:
+// - error: An error is returned if there is an issue deleting the file from MinIO.
 func DeleteFileFromMinIO(ctx context.Context, bucketName, objectName string) error {
 	// Remove the object from the MinIO bucket
 	err := config.MinIO.RemoveObject(ctx, bucketName, objectName, minio.RemoveObjectOptions{})

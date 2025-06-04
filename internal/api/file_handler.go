@@ -2,6 +2,9 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"fileserver/config"
+	"fileserver/internal/models"
 	"fileserver/internal/service"
 	"fmt"
 	"github.com/google/uuid"
@@ -18,6 +21,37 @@ const (
 	localFolderTemplate = "%s/fileserver/uploads/" // Template for creating local upload directories
 )
 
+// GetFiles retrieves the list of indexed documents from the database with fuzzy search on file names
+func GetFiles(w http.ResponseWriter, r *http.Request) {
+	// Step 1: Retrieve the search query from the URL parameters
+	searchQuery := r.URL.Query().Get("searchQuery")
+	if searchQuery == "" {
+		// If there is no search query, retrieve all documents
+		searchQuery = "%"
+	} else {
+		// Add wildcards for partial search
+		searchQuery = "%" + searchQuery + "%"
+	}
+
+	// Step 2: Retrieve documents whose name matches the fuzzy search
+	documents, err := service.GetFiles(searchQuery)
+	if err != nil {
+		// Handle error if the query fails
+		http.Error(w, fmt.Sprintf("Error retrieving documents: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Step 3: Convert the documents to JSON format
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	// Use json.NewEncoder to write the response directly in JSON format
+	if err := json.NewEncoder(w).Encode(documents); err != nil {
+		http.Error(w, fmt.Sprintf("Error encoding response: %v", err), http.StatusInternalServerError)
+		return
+	}
+}
+
 // GetFile handles the request to fetch a file from MinIO and serve it to the user.
 func GetFile(w http.ResponseWriter, r *http.Request) {
 	// Ensure that the request method is GET
@@ -27,7 +61,19 @@ func GetFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract the object name from the query parameters
-	objectName := r.URL.Query().Get("file")
+	objectName := r.PathValue("idFile")
+	idFile, err := uuid.Parse(objectName)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error parsing objectName: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	document, err := service.GetDocument(idFile)
+	if document == nil || err != nil {
+		http.Error(w, fmt.Sprintf("Error retrieving document: %v", err), http.StatusNotFound)
+		return
+	}
+
 	// Fetch the file object from MinIO storage
 	object, err := service.GetFileFromMinIO(defaultBucketName, objectName)
 	if err != nil {
@@ -121,7 +167,8 @@ func LoadFile(w http.ResponseWriter, r *http.Request) {
 
 	// Use a unique file name based on timestamp and the original file name
 	newFileName := fmt.Sprintf("%d_%s", time.Now().Unix(), header.Filename)
-	out, err := os.Create(uploadDir + newFileName)
+	filePath := uploadDir + newFileName
+	out, err := os.Create(filePath)
 	if err != nil {
 		http.Error(w, "Error saving the file: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -143,11 +190,37 @@ func LoadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Calculate fingerprint of file
+	//fingerprint, err := utils.CalculateFingerprint(filePath)
+	//if err != nil {
+	//	http.Error(w, "Error during calculate fingerprint: "+err.Error(), http.StatusInternalServerError)
+	//	return
+	//}
+	fingerprint := uuid.New().String()
+
+	// Check if document already uploaded
+	_, err = service.GetDocumentByFingerprint(fingerprint)
+	if err == nil {
+		http.Error(w, "Document already exists.", http.StatusConflict)
+		return
+	}
+
 	// Upload the file to MinIO with a unique ID (UUID)
-	idFile := uuid.New().String()
-	err = service.UploadFileToMinIO(context.Background(), defaultBucketName, idFile, uploadDir+newFileName)
+	idFile := uuid.New()
+	err = service.UploadFileToMinIO(context.Background(), defaultBucketName, idFile.String(), filePath)
 	if err != nil {
-		http.Error(w, "", http.StatusInternalServerError)
+		http.Error(w, "Error during upload file to MinIO: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Save document to database
+	newDocument := &models.Document{
+		Name:        header.Filename,
+		IdFile:      idFile,
+		Fingerprint: fingerprint,
+	}
+	if err := service.AddDocument(newDocument); err != nil {
+		http.Error(w, "Error adding document: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -175,7 +248,35 @@ func cleanup(file *os.File) error {
 	return nil
 }
 
-// DeleteFile handles the file deletion logic (currently empty).
+// DeleteFile deletes a file from the database and MinIO
 func DeleteFile(w http.ResponseWriter, r *http.Request) {
-	// This function is a placeholder for file deletion logic.
+	// Ensure that the request method is GET
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract the object name from the path value
+	idFile, err := uuid.Parse(r.PathValue("idFile"))
+	if err != nil {
+		http.Error(w, "Error parsing the idFile: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Step 1: Get document from PostgreSQL database
+	document, err := service.GetDocument(idFile)
+	if err != nil {
+		http.Error(w, "Document not found: "+err.Error(), http.StatusNotFound)
+		return
+	}
+
+	// Step 2: Delete from PostgreSQL
+	if err := config.DB.Delete(&document).Error; err != nil {
+		http.Error(w, fmt.Sprintf("Error deleting document from DB: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Return success response
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "File with ID %v deleted successfully", idFile)
 }

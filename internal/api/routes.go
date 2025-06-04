@@ -3,8 +3,9 @@ package api
 import "net/http"
 
 var Routes = map[string]func(w http.ResponseWriter, r *http.Request){
-	"GET /":        Hello,
-	"GET /file":    GetFile,
-	"POST /file":   LoadFile,
-	"DELETE /file": DeleteFile,
+	"GET /":                 Hello,
+	"GET /files":            GetFiles,
+	"GET /file/{idFile}":    GetFile,
+	"POST /file":            LoadFile,
+	"DELETE /file/{idFile}": DeleteFile,
 }
